@@ -41,6 +41,7 @@ SRCS = \
     $(NRF5_SDK_ROOT)/components/ble/common/ble_conn_state.c \
     $(NRF5_SDK_ROOT)/components/ble/common/ble_srv_common.c \
     $(NRF5_SDK_ROOT)/components/ble/nrf_ble_gatt/nrf_ble_gatt.c \
+    $(NRF5_SDK_ROOT)/components/ble/peer_manager/nrf_ble_lesc.c \
     $(NRF5_SDK_ROOT)/components/boards/boards.c \
     $(NRF5_SDK_ROOT)/components/libraries/atomic/nrf_atomic.c \
     $(NRF5_SDK_ROOT)/components/libraries/atomic_fifo/nrf_atfifo.c \
@@ -48,6 +49,36 @@ SRCS = \
     $(NRF5_SDK_ROOT)/components/libraries/balloc/nrf_balloc.c \
     $(NRF5_SDK_ROOT)/components/libraries/button/app_button.c \
     $(NRF5_SDK_ROOT)/components/libraries/crc16/crc16.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/nrf_hw/nrf_hw_backend_init.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/nrf_hw/nrf_hw_backend_rng.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/nrf_hw/nrf_hw_backend_rng_mbedtls.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_aes.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_aes_aead.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_chacha_poly_aead.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_ecc.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_ecdh.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_ecdsa.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_eddsa.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_hash.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_hmac.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_init.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_mutex.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_rng.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/cc310/cc310_backend_shared.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/nrf_crypto_aead.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/nrf_crypto_aes.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/nrf_crypto_aes_shared.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/nrf_crypto_ecc.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/nrf_crypto_ecdh.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/nrf_crypto_ecdsa.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/nrf_crypto_eddsa.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/nrf_crypto_error.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/nrf_crypto_hash.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/nrf_crypto_hkdf.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/nrf_crypto_hmac.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/nrf_crypto_init.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/nrf_crypto_rng.c \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/nrf_crypto_shared.c \
     $(NRF5_SDK_ROOT)/components/libraries/experimental_section_vars/nrf_section_iter.c \
     $(NRF5_SDK_ROOT)/components/libraries/hardfault/hardfault_implementation.c \
     $(NRF5_SDK_ROOT)/components/libraries/fds/fds.c \
@@ -101,6 +132,7 @@ INC_DIRS = \
     $(NRF5_SDK_ROOT)/components/ble/ble_advertising \
     $(NRF5_SDK_ROOT)/components/ble/common \
     $(NRF5_SDK_ROOT)/components/ble/nrf_ble_gatt \
+    $(NRF5_SDK_ROOT)/components/ble/peer_manager \
     $(NRF5_SDK_ROOT)/components/libraries/atomic \
     $(NRF5_SDK_ROOT)/components/libraries/atomic_flags \
     $(NRF5_SDK_ROOT)/components/libraries/atomic_fifo \
@@ -108,6 +140,16 @@ INC_DIRS = \
     $(NRF5_SDK_ROOT)/components/libraries/bsp \
     $(NRF5_SDK_ROOT)/components/libraries/button \
     $(NRF5_SDK_ROOT)/components/libraries/crc16 \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/cc310 \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/cc310_bl \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/cifra \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/mbedtls \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/micro_ecc \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/nrf_hw \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/nrf_sw \
+    $(NRF5_SDK_ROOT)/components/libraries/crypto/backend/oberon \
+	$(NRF5_SDK_ROOT)/components/libraries/crypto/backend/optiga \
     $(NRF5_SDK_ROOT)/components/libraries/delay \
     $(NRF5_SDK_ROOT)/components/libraries/experimental_section_vars \
     $(NRF5_SDK_ROOT)/components/libraries/fds \
@@ -132,6 +174,8 @@ INC_DIRS = \
     $(NRF5_SDK_ROOT)/components/toolchain/cmsis/include \
     $(NRF5_SDK_ROOT)/config/nrf52840/config \
     $(NRF5_SDK_ROOT)/external/fprintf \
+    $(NRF5_SDK_ROOT)/external/nrf_cc310/include \
+    $(NRF5_SDK_ROOT)/external/nrf_tls/mbedtls/nrf_crypto/config \
     $(NRF5_SDK_ROOT)/external/segger_rtt \
     $(NRF5_SDK_ROOT)/integration/nrfx \
     $(NRF5_SDK_ROOT)/integration/nrfx/legacy \
@@ -139,6 +183,9 @@ INC_DIRS = \
     $(NRF5_SDK_ROOT)/modules/nrfx/drivers/include \
     $(NRF5_SDK_ROOT)/modules/nrfx/hal \
     $(NRF5_SDK_ROOT)/modules/nrfx/mdk
+
+LIBS = \
+    $(NRF5_SDK_ROOT)/external/nrf_cc310/lib/cortex-m4/hard-float/libnrf_cc310_0.9.13.a
 
 DEFINES = \
     NRF52840_XXAA \

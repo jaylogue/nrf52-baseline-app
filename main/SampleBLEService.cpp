@@ -33,6 +33,7 @@
 #include "ble_srv_common.h"
 #include "nrf_ble_gatt.h"
 #include "ble_conn_state.h"
+#include "nrf_ble_lesc.h"
 
 #if NRF_LOG_ENABLED
 #include "nrf_log.h"
@@ -61,6 +62,21 @@ uint16_t sServiceHandle;
 ble_gatts_char_handles_t sLEDCharHandles;
 ble_gatts_char_handles_t sButtonCharHandles;
 
+ble_gap_lesc_p256_pk_t sPeerLESCPubKey;
+ble_gap_sec_keyset_t sKeySet;
+
+void ToHexString(uint8_t * data, size_t dataLen, char * outBuf, size_t outBufSize)
+{
+    for (; dataLen > 0; data++, dataLen--)
+    {
+        snprintf(outBuf, outBufSize, "%02" PRIx8, *data);
+        if (outBufSize <= 2)
+            break;
+        outBuf += 2;
+        outBufSize -= 2;
+    }
+}
+
 } // unnamed namespace
 
 ret_code_t SampleBLEService::Init(void)
@@ -71,6 +87,9 @@ ret_code_t SampleBLEService::Init(void)
     NRF_SDH_BLE_OBSERVER(m_ble_observer, BLE_OBSERVER_PRIO, SampleBLEService::HandleBLEEvent, NULL);
 
     ble_conn_state_init();
+
+    res = nrf_ble_lesc_init();
+    SuccessOrExit(res);
 
     res = SetDeviceName();
     SuccessOrExit(res);
@@ -83,6 +102,32 @@ ret_code_t SampleBLEService::Init(void)
 
     res = StartAdvertising();
     SuccessOrExit(res);
+
+    {
+        char buf[65];
+        ble_gap_lesc_p256_pk_t * localPubKey = nrf_ble_lesc_public_key_get();
+
+        NRF_LOG_INFO("Local LESC public key:");
+        ToHexString(localPubKey->pk, 32, buf, sizeof(buf));
+        NRF_LOG_INFO("  X: %s", buf);
+        ToHexString(localPubKey->pk + 32, 32, buf, sizeof(buf));
+        NRF_LOG_INFO("  Y: %s", buf);
+    }
+
+    {
+        char buf[BLE_GAP_SEC_KEY_LEN * 2 + 1];
+
+        res = nrf_ble_lesc_own_oob_data_generate();
+        SuccessOrExit(res);
+
+        ble_gap_lesc_oob_data_t * localOOBData = nrf_ble_lesc_own_oob_data_get();
+
+        NRF_LOG_INFO("Local LESC OOB data:");
+        ToHexString(localOOBData->c, BLE_GAP_SEC_KEY_LEN, buf, sizeof(buf));
+        NRF_LOG_INFO("  Confirmation Value: %s", buf);
+        ToHexString(localOOBData->r, BLE_GAP_SEC_KEY_LEN, buf, sizeof(buf));
+        NRF_LOG_INFO("  Random Value: %s", buf);
+    }
 
 exit:
     return res;
@@ -285,12 +330,13 @@ exit:
 void SampleBLEService::HandleBLEEvent(ble_evt_t const * bleEvent, void * context)
 {
     ret_code_t res;
+    uint16_t conHandle = bleEvent->evt.gap_evt.conn_handle;
 
     switch (bleEvent->header.evt_id)
     {
     case BLE_GAP_EVT_CONNECTED:
 
-        NRF_LOG_INFO("BLE connection established (con %" PRIu16 ")", bleEvent->evt.gap_evt.conn_handle);
+        NRF_LOG_INFO("BLE connection established (con %" PRIu16 ")", conHandle);
 
         OnConnectionEstablished();
 
@@ -307,7 +353,7 @@ void SampleBLEService::HandleBLEEvent(ble_evt_t const * bleEvent, void * context
 
     case BLE_GAP_EVT_DISCONNECTED:
 
-        NRF_LOG_INFO("BLE connection terminated (con %" PRIu16 ", reason 0x%02" PRIx8 ")", bleEvent->evt.gap_evt.conn_handle, bleEvent->evt.gap_evt.params.disconnected.reason);
+        NRF_LOG_INFO("BLE connection terminated (con %" PRIu16 ", reason 0x%02" PRIx8 ")", conHandle, bleEvent->evt.gap_evt.params.disconnected.reason);
 
         OnConnectionTerminated();
 
@@ -320,25 +366,124 @@ void SampleBLEService::HandleBLEEvent(ble_evt_t const * bleEvent, void * context
         break;
 
     case BLE_GAP_EVT_SEC_PARAMS_REQUEST:
-        // BLE Pairing not supported
-        res = sd_ble_gap_sec_params_reply(bleEvent->evt.gap_evt.conn_handle,
-                                          BLE_GAP_SEC_STATUS_PAIRING_NOT_SUPP,
-                                          NULL,
-                                          NULL);
+    {
+        const ble_gap_evt_sec_params_request_t * secParamsReq = &bleEvent->evt.gap_evt.params.sec_params_request;
+
+        NRF_LOG_INFO("BLE_GAP_EVT_SEC_PARAMS_REQUEST received (con %" PRIu16 ")", conHandle);
+        NRF_LOG_INFO("    bond: %" PRIu8, secParamsReq->peer_params.bond);
+        NRF_LOG_INFO("    mitm: %" PRIu8, secParamsReq->peer_params.mitm);
+        NRF_LOG_INFO("    lesc: %" PRIu8, secParamsReq->peer_params.lesc);
+        NRF_LOG_INFO("    keypress: %" PRIu8, secParamsReq->peer_params.keypress);
+        NRF_LOG_INFO("    io_caps: 0x%02" PRIX8, secParamsReq->peer_params.io_caps);
+        NRF_LOG_INFO("    oob: %" PRIu8, secParamsReq->peer_params.oob);
+        NRF_LOG_INFO("    min_key_size: %" PRIu8, secParamsReq->peer_params.min_key_size);
+        NRF_LOG_INFO("    max_key_size: %" PRIu8, secParamsReq->peer_params.max_key_size);
+
+        ble_gap_sec_params_t secParams;
+        memset(&secParams, 0, sizeof(secParams));
+        secParams.bond = 0;
+        secParams.mitm = 0;
+        secParams.lesc = 1;
+        secParams.keypress = 0;
+        secParams.io_caps = BLE_GAP_IO_CAPS_NONE;
+        secParams.oob = 0;
+        secParams.min_key_size = 16;
+        secParams.max_key_size = 16;
+
+        memset(&sKeySet, 0, sizeof(sKeySet));
+        sKeySet.keys_own.p_pk = nrf_ble_lesc_public_key_get();
+        sKeySet.keys_peer.p_pk = &sPeerLESCPubKey;
+        memset(&sPeerLESCPubKey, 0, sizeof(sPeerLESCPubKey));
+
+        res = sd_ble_gap_sec_params_reply(conHandle,
+                                          BLE_GAP_SEC_STATUS_SUCCESS,
+                                          &secParams,
+                                          &sKeySet);
+        NRF_LOG_INFO("sd_ble_gap_sec_params_reply() result (con %" PRIu16 "): 0x%08" PRIX32, conHandle, res);
         SuccessOrExit(res);
         break;
+    }
+
+    case BLE_GAP_EVT_LESC_DHKEY_REQUEST:
+    {
+        const ble_gap_evt_lesc_dhkey_request_t * lescDHKeyReq = &bleEvent->evt.gap_evt.params.lesc_dhkey_request;
+        char buf[65];
+
+        NRF_LOG_INFO("BLE_GAP_EVT_LESC_DHKEY_REQUEST received (con %" PRIu16 ")", conHandle);
+        NRF_LOG_INFO("    Peer LESC public key:");
+        ToHexString(lescDHKeyReq->p_pk_peer->pk, 32, buf, sizeof(buf));
+        NRF_LOG_INFO("        X: %s", buf);
+        ToHexString(lescDHKeyReq->p_pk_peer->pk + 32, 32, buf, sizeof(buf));
+        NRF_LOG_INFO("        Y: %s", buf);
+        NRF_LOG_INFO("    oobd_req: %" PRIu8, lescDHKeyReq->oobd_req);
+        break;
+    }
+
+    case BLE_GAP_EVT_AUTH_KEY_REQUEST:
+    {
+        const ble_gap_evt_auth_key_request_t * authKeyReq = &bleEvent->evt.gap_evt.params.auth_key_request;
+
+        NRF_LOG_INFO("BLE_GAP_EVT_AUTH_KEY_REQUEST received (con %" PRIu16 ")", conHandle);
+        NRF_LOG_INFO("    key_type: %" PRIu8, authKeyReq->key_type);
+
+        // NOTE: Since this event is used for legacy pairing, and legacy pairing is unsupported,
+        // we respond with a key type of NONE.
+        res = sd_ble_gap_auth_key_reply(conHandle, BLE_GAP_AUTH_KEY_TYPE_NONE, NULL);
+        NRF_LOG_INFO("sd_ble_gap_auth_key_reply() result (con %" PRIu16 "): 0x%08" PRIX32, conHandle, res);
+        SuccessOrExit(res);
+        break;
+    }
+
+    case BLE_GAP_EVT_SEC_INFO_REQUEST:
+    {
+        NRF_LOG_INFO("BLE_GAP_EVT_SEC_INFO_REQUEST received (con %" PRIu16 ")", conHandle);
+        break;
+    }
+
+    case BLE_GAP_EVT_CONN_SEC_UPDATE:
+    {
+        const ble_gap_evt_conn_sec_update_t * connSecUpdate = &bleEvent->evt.gap_evt.params.conn_sec_update;
+
+        NRF_LOG_INFO("BLE_GAP_EVT_CONN_SEC_UPDATE received (con %" PRIu16 ")", conHandle);
+        NRF_LOG_INFO("    sec mode: 0x%02" PRIX8, connSecUpdate->conn_sec.sec_mode.sm);
+        NRF_LOG_INFO("    sec level: 0x%02" PRIX8, connSecUpdate->conn_sec.sec_mode.lv);
+        NRF_LOG_INFO("    encr_key_size: %" PRId8, connSecUpdate->conn_sec.encr_key_size);
+
+        break;
+    }
+
+    case BLE_GAP_EVT_AUTH_STATUS:
+    {
+        const ble_gap_evt_auth_status_t * authStatus = &bleEvent->evt.gap_evt.params.auth_status;
+
+        NRF_LOG_INFO("BLE_GAP_EVT_AUTH_STATUS received (con %" PRIu16 ")", conHandle);
+        NRF_LOG_INFO("    auth_status: 0x%02" PRIX8, authStatus->auth_status);
+        NRF_LOG_INFO("    error_src: 0x%02" PRIX8, authStatus->error_src);
+        NRF_LOG_INFO("    bonded: %" PRId8, authStatus->bonded);
+        NRF_LOG_INFO("    lesc: %" PRId8, authStatus->lesc);
+        NRF_LOG_INFO("    sec mode 1, level 1: %" PRId8, authStatus->sm1_levels.lv1);
+        NRF_LOG_INFO("    sec mode 1, level 2: %" PRId8, authStatus->sm1_levels.lv2);
+        NRF_LOG_INFO("    sec mode 1, level 3: %" PRId8, authStatus->sm1_levels.lv3);
+        NRF_LOG_INFO("    sec mode 1, level 4: %" PRId8, authStatus->sm1_levels.lv4);
+        NRF_LOG_INFO("    sec mode 2, level 1: %" PRId8, authStatus->sm2_levels.lv1);
+        NRF_LOG_INFO("    sec mode 2, level 2: %" PRId8, authStatus->sm2_levels.lv2);
+
+        break;
+    }
 
     case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
     {
-        NRF_LOG_INFO("BLE GAP PHY update request (con %" PRIu16 ")", bleEvent->evt.gap_evt.conn_handle);
+        NRF_LOG_INFO("BLE GAP PHY update request (con %" PRIu16 ")", conHandle);
         const ble_gap_phys_t phys = { BLE_GAP_PHY_AUTO, BLE_GAP_PHY_AUTO };
-        res = sd_ble_gap_phy_update(bleEvent->evt.gap_evt.conn_handle, &phys);
+        res = sd_ble_gap_phy_update(conHandle, &phys);
+        NRF_LOG_INFO("sd_ble_gap_phy_update() result (con %" PRIu16 "): 0x%08" PRIX32, conHandle, res);
         SuccessOrExit(res);
         break;
     }
 
     case BLE_GATTS_EVT_SYS_ATTR_MISSING:
         res = sd_ble_gatts_sys_attr_set(bleEvent->evt.gatts_evt.conn_handle, NULL, 0, 0);
+        NRF_LOG_INFO("sd_ble_gatts_sys_attr_set() result (con %" PRIu16 "): 0x%08" PRIX32, conHandle, res);
         SuccessOrExit(res);
         break;
 
@@ -346,6 +491,7 @@ void SampleBLEService::HandleBLEEvent(ble_evt_t const * bleEvent, void * context
         NRF_LOG_INFO("BLE GATT Server timeout (con %" PRIu16 ")", bleEvent->evt.gatts_evt.conn_handle);
         res = sd_ble_gap_disconnect(bleEvent->evt.gatts_evt.conn_handle,
                                     BLE_HCI_REMOTE_USER_TERMINATED_CONNECTION);
+        NRF_LOG_INFO("sd_ble_gap_disconnect() result (con %" PRIu16 "): 0x%08" PRIX32, conHandle, res);
         SuccessOrExit(res);
         break;
 
@@ -361,14 +507,17 @@ void SampleBLEService::HandleBLEEvent(ble_evt_t const * bleEvent, void * context
 
         break;
 
-    case BLE_GATTS_EVT_HVC:
+//    case BLE_GATTS_EVT_HVC:
 //        err = HandleTXComplete(event);
 //        SuccessOrExit(err);
-        break;
+//        break;
 
     default:
+        NRF_LOG_INFO("Other BLE event %" PRIu16 "(con %" PRIu16 ")", bleEvent->header.evt_id, conHandle);
         break;
     }
+
+    nrf_ble_lesc_on_ble_evt(bleEvent);
 
 exit:
     return;

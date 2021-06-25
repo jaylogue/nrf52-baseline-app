@@ -42,6 +42,7 @@
 #include "nrf_sdh_ble.h"
 #include "nrf_sdh_soc.h"
 #include "ble_advdata.h"
+#include "nrf_ble_lesc.h"
 #endif // SOFTDEVICE_PRESENT
 
 #if NRF_CRYPTO_ENABLED
@@ -273,6 +274,11 @@ int main(void)
 #if NRF_LOG_DEFERRED
         while (NRF_LOG_PROCESS())
             ;
+#endif
+
+#if SOFTDEVICE_PRESENT && NRF_BLE_LESC_ENABLED
+        res = nrf_ble_lesc_request_handler();
+        APP_ERROR_CHECK(res);
 #endif
 
         nrf_pwr_mgmt_run();

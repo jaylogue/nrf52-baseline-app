@@ -44,7 +44,10 @@
 
 // ----- Crypto Config -----
 
-#define NRF_CRYPTO_ENABLED 0
+#define NRF_CRYPTO_ENABLED 1
+#define NRF_CRYPTO_BACKEND_CC310_ENABLED 1
+#define NRF_CRYPTO_RNG_AUTO_INIT_ENABLED 1
+#define NRF_CRYPTO_ALLOCATOR 3 // 3 = malloc
 
 // ----- SoftDevice Config -----
 
@@ -158,5 +161,7 @@
 
 #define NRFX_PRS_ENABLED 1
 #define NRFX_PRS_BOX_4_ENABLED 1
+
+#define NRF_BLE_LESC_ENABLED 1
 
 #endif //APP_CONFIG_H
