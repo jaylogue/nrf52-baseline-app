@@ -16,6 +16,11 @@
  *
  */
 
+/**
+ *   @file
+ *         A simple BLE service based on the Nordic SoftDevice and nRF5 SDK.
+ */
+
 #ifndef SAMPLEBLESERVICE_H_
 #define SAMPLEBLESERVICE_H_
 

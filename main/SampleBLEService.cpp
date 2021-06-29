@@ -16,6 +16,11 @@
  *
  */
 
+/**
+ *   @file
+ *         A simple BLE service based on the Nordic SoftDevice and nRF5 SDK.
+ */
+
 #include <sdk_common.h>
 
 #if defined(SOFTDEVICE_PRESENT) && SOFTDEVICE_PRESENT

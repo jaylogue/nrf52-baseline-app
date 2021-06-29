@@ -16,6 +16,11 @@
  *    limitations under the License.
  */
 
+/**
+ *   @file
+ *         Configuration overrides for the nrf52-baseline-app embedded application.
+ */
+
 #ifndef APP_CONFIG_H
 #define APP_CONFIG_H
 

@@ -16,6 +16,10 @@
  *
  */
 
+/**
+ *   @file
+ *         main function for the nrf52-baseline-app embedded application.
+ */
 
 #include <stdbool.h>
 #include <stdint.h>
