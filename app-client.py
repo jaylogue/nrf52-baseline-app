@@ -1,0 +1,295 @@
+import argparse
+from gi.repository import GLib, GObject
+import sys, os, fcntl, termios
+import dasbus
+import dasbus.identifier
+import dasbus.connection
+import dasbus.loop
+import dasbus.client.proxy
+import dasbus.typing
+
+scriptName = os.path.basename(sys.argv[0])
+
+class AppClient():
+    
+    BUTTON_CHAR_UUID = '00001524-1212-efde-1523-785feabcd123'
+    LED_CHAR_UUID = '00001525-1212-efde-1523-785feabcd123'
+
+    def __init__(self):
+        self.adapterName = None
+        self.deviceMAC = None
+        self.enablePairing = True
+        self.bus = None
+        self.eventLoop = None
+        self.inputSource = None
+        self.bluezServiceObj = None
+        self.adapterObj = None
+        self.deviceObj = None
+        self.ledChar = None
+        self.buttonChar = None
+
+    def main(self, args=None):
+        try:
+            # Parse the command name argument, along with arguments for the command.
+            argParser = ArgumentParser(prog=scriptName)
+            argParser.add_argument('-a', '--adapter', dest='adapterName', default='hci0', help='Name of the BLE adapter to use (default: hci0)')
+            argParser.add_argument('-n', '--no-pairing', dest='enablePairing', action='store_false', 
+                                   help="Disable pairing with the target device.  But default LESC 'just-works' pairing will be performed")
+            argParser.add_argument('deviceMAC', help='BLE MAC address of the target device. This argument is required.')
+            args = argParser.parse_args(args=args)
+            self.adapterName = args.adapterName
+            self.deviceMAC = args.deviceMAC
+            self.enablePairing = args.enablePairing
+        
+            self.bus = dasbus.connection.SystemMessageBus()
+            self.bluezRootObj = self.bus.get_proxy('org.bluez', '/')
+            
+            adapterPath = f'/org/bluez/{self.adapterName}'
+            if adapterPath not in self.bluezRootObj.GetManagedObjects():
+                raise UsageError(f'{scriptName}: BLE adapter {self.adapterName} not found')
+            self.adapterObj = self.bus.get_proxy('org.bluez', adapterPath)
+            
+            self.eventLoop = dasbus.loop.EventLoop()
+        
+            self.scanForDevice()
+        
+            self.eventLoop.run()
+            
+            return 0
+        
+        except UsageError as ex:
+            print('%s' % ex)
+            return 1
+        
+        except KeyboardInterrupt:
+            return 1
+
+        finally:
+            if self.eventLoop is not None:
+                print('Quitting...')
+            if self.deviceObj is not None:
+                print('Closing BLE connection...')
+                self.deviceObj.Disconnect()
+            if self.inputSource is not None:
+                self.inputSource.shutdown()
+            if self.eventLoop is not None:
+                self.eventLoop.quit()
+                print('Done')
+        
+    def scanForDevice(self):
+        
+        def matchTargetDevice(path, interfaces):
+            deviceInterfaceProps = interfaces.get('org.bluez.Device1', None)
+            if deviceInterfaceProps is None:
+                return
+            deviceAddr = deviceInterfaceProps.get('Address', None)
+            if deviceAddr is None:
+                return
+            if deviceAddr.unpack() != self.deviceMAC:
+                return
+    
+            print('Device found')
+    
+            self.adapterObj.StopDiscovery()
+            self.bluezRootObj.InterfacesAdded.disconnect()
+                
+            self.deviceObj = self.bus.get_proxy('org.bluez', path)
+            
+            self.connectToDevice()
+
+        devicePath = f'/org/bluez/{self.adapterName}/dev_{self.deviceMAC.replace(":", "_")}'
+        if devicePath in self.bluezRootObj.GetManagedObjects():
+            self.deviceObj = self.bus.get_proxy('org.bluez', devicePath)
+            if self.deviceObj.Connected:
+                self.deviceObj.Disconnect()
+            self.adapterObj.RemoveDevice(devicePath)
+            self.deviceObj = None
+        
+        print("Scanning for device...")
+        self.bluezRootObj.InterfacesAdded.connect(matchTargetDevice)
+        self.adapterObj.StartDiscovery()
+
+    def connectToDevice(self):
+
+        def onConnectComplete(result):
+            try:
+                result()
+            except:
+                print('Connect failed')
+                self.eventLoop.quit()
+                raise
+            
+            try:
+                print('BLE connection established')
+                self.waitServicesResolved()
+            except:
+                self.eventLoop.quit()
+                raise
+        
+        print("Initiating BLE connection to device...")
+        self.deviceObj.Connect(callback=onConnectComplete)
+
+    def waitServicesResolved(self):
+
+        def detectServicesResolved(interface, changedProps, invalidatedProps):
+            if interface != 'org.bluez.Device1':
+                return 
+            val = changedProps.get('ServicesResolved', None)
+            if val is None:
+                return
+            val = val.unpack()
+            if val != True:
+                return
+            
+            print('Device services enumerated')
+            
+            if self.enablePairing:
+                self.pairDevice()
+            else:
+                self.startUI()
+        
+        try:
+            self.deviceObj.PropertiesChanged.connect(detectServicesResolved)
+            if not self.deviceObj.ServicesResolved:
+                print('Enumerating device services...')
+            else:
+                self.deviceObj.PropertiesChanged.disconnect()
+                self.pairDevice()
+        except:
+            self.eventLoop.quit()
+            raise
+
+    def pairDevice(self):
+    
+        def onPairComplete(result):
+            try:
+                result()
+            except:
+                print('BLE pairing failed')
+                self.eventLoop.quit()
+                raise
+            
+            print('BLE pairing succeeded')
+    
+            self.startUI()
+    
+        try:
+            if not self.deviceObj.Paired:
+                print('Initiating BLE pairing...')
+                self.deviceObj.Pair(callback=onPairComplete)
+            else:
+                print('Device already paired')
+                self.startUI()
+        except:
+            self.eventLoop.quit()
+            raise
+
+    def startUI(self):
+
+        def onButtonNotify(sourceIface, changedProps, removedProps):
+            if 'Value' in changedProps:
+                value = changedProps['Value']
+                value = value[0]
+                if value == 0:
+                    print('Button RELEASED')
+                else:
+                    print('Button PRESSED')
+
+        def onInput(obj, ch):
+            ch = ch.lower()
+            if ch == 'q':
+                self.eventLoop.quit()
+            elif ch == 'o':
+                self.setLED(on=True)
+            elif ch == 'f':
+                self.setLED(on=False)
+        
+        try:
+            devicePath = dasbus.client.proxy.get_object_path(self.deviceObj)
+    
+            self.ledChar = self.getCharacteristicObj(devicePath, AppClient.LED_CHAR_UUID)
+            self.buttonChar = self.getCharacteristicObj(devicePath, AppClient.BUTTON_CHAR_UUID)
+            
+            self.setLED(False)
+            
+            self.buttonChar.PropertiesChanged.connect(onButtonNotify)
+            self.buttonChar.StartNotify()
+            
+            self.inputSource = RawInputSource()
+            self.inputSource.connect('onCharacter', onInput)
+    
+            print('Ready')
+            print('')
+            print('Press o to turn LED on')
+            print('Press f to turn LED off')
+            print('Press q to quit')
+            print('')
+        except:
+            self.eventLoop.quit()
+            raise
+
+    def setLED(self, on):
+        self.ledChar.WriteValue([ 1 if on else 0 ], [])
+        print('LED state set to %s' % ('ON' if on else 'OFF'))
+    
+    def getCharacteristicObj(self, containerPath, uuid):
+        for objPath, objIntfs in self.bluezRootObj.GetManagedObjects().items():
+            if objPath.startswith(containerPath):
+                intfProps = objIntfs.get('org.bluez.GattCharacteristic1', None)
+                if intfProps is not None:
+                    if intfProps['UUID'].unpack() == uuid:
+                        return self.bus.get_proxy('org.bluez', objPath)
+        return None
+
+class UsageError(Exception):
+    pass
+
+class ArgumentParser(argparse.ArgumentParser):
+    def error(self, message):
+        raise UsageError('{0}: {1}'.format(self.prog, message))
+
+class RawInputSource(GObject.Object):
+    __gsignals__ = {
+        'onCharacter': (GObject.SIGNAL_RUN_FIRST, None, (str,))
+    }
+    
+    def __init__(self):
+        GObject.GObject.__init__(self)
+        
+        self._stdinFD = sys.stdin.fileno()
+
+        # Put stdin in non-blocking mode
+        stdinFlags = fcntl.fcntl(self._stdinFD, fcntl.F_GETFL)
+        stdinFlags = stdinFlags | os.O_NONBLOCK
+        fcntl.fcntl(self._stdinFD, fcntl.F_SETFL, stdinFlags)
+
+        # Put input terminal in cbreak mode
+        (iflag, oflag, cflag, lflag, ispeed, ospeed, cc) = termios.tcgetattr(self._stdinFD)
+        self._prevTermios = [iflag, oflag, cflag, lflag, ispeed, ospeed, cc]
+        lflag = lflag & ~termios.ICANON
+        lflag = lflag & ~termios.ECHO
+        cc[termios.VMIN] = 1
+        cc[termios.VTIME] = 0
+        termios.tcsetattr(self._stdinFD, termios.TCSANOW, [iflag, oflag, cflag, lflag, ispeed, ospeed, cc])
+        
+        # Monitor stdin for input
+        self._sourceId = GLib.io_add_watch(sys.stdin, GLib.IO_IN, self._onDataReady)
+
+    def _onDataReady(self, fd, condition):
+        if (condition & GLib.IO_IN) != 0:
+            input = fd.read()
+            for ch in input:
+                self.emit('onCharacter', ch)
+        return True
+    
+    def shutdown(self):
+        
+        # Remove event source
+        GLib.source_remove(self._sourceId)
+        
+        # Restore previous terminal mode
+        (iflag, oflag, cflag, lflag, ispeed, ospeed, cc) = termios.tcgetattr(self._stdinFD)
+        termios.tcsetattr(self._stdinFD, termios.TCSANOW, self._prevTermios)
+
+if __name__ == '__main__':
+    sys.exit(AppClient().main())
