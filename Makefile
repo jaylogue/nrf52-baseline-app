@@ -200,7 +200,7 @@ DEFINES = \
 
 
 CFLAGS = \
-    --specs=nano.specs
+    --specs=nano.specs -Wno-unused-function
 
 LDFLAGS = \
     --specs=nano.specs

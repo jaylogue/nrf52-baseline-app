@@ -46,6 +46,8 @@
 
 namespace {
 
+constexpr size_t kP256PubKeyCoordLength = 32;
+
 const ble_uuid128_t sServiceUUID128    = { { 0x23, 0xD1, 0xBC, 0xEA, 0x5F, 0x78, 0x23, 0x15, 0xDE, 0xEF, 0x12, 0x12, 0x23, 0x15, 0x00, 0x00 } };
 const ble_uuid128_t sButtonCharUUID128 = { { 0x23, 0xD1, 0xBC, 0xEA, 0x5F, 0x78, 0x23, 0x15, 0xDE, 0xEF, 0x12, 0x12, 0x24, 0x15, 0x00, 0x00 } };
 const ble_uuid128_t sLEDCharUUID128    = { { 0x23, 0xD1, 0xBC, 0xEA, 0x5F, 0x78, 0x23, 0x15, 0xDE, 0xEF, 0x12, 0x12, 0x25, 0x15, 0x00, 0x00 } };
@@ -104,13 +106,13 @@ ret_code_t SampleBLEService::Init(void)
     SuccessOrExit(res);
 
     {
-        char buf[65];
+        char buf[kP256PubKeyCoordLength * 2 + 1];
         ble_gap_lesc_p256_pk_t * localPubKey = nrf_ble_lesc_public_key_get();
 
         NRF_LOG_INFO("Local LESC public key:");
-        ToHexString(localPubKey->pk, 32, buf, sizeof(buf));
+        ToHexString(localPubKey->pk, kP256PubKeyCoordLength, buf, sizeof(buf));
         NRF_LOG_INFO("  X: %s", buf);
-        ToHexString(localPubKey->pk + 32, 32, buf, sizeof(buf));
+        ToHexString(localPubKey->pk + kP256PubKeyCoordLength, kP256PubKeyCoordLength, buf, sizeof(buf));
         NRF_LOG_INFO("  Y: %s", buf);
     }
 
@@ -406,16 +408,17 @@ void SampleBLEService::HandleBLEEvent(ble_evt_t const * bleEvent, void * context
 
     case BLE_GAP_EVT_LESC_DHKEY_REQUEST:
     {
+        char buf[kP256PubKeyCoordLength * 2 + 1];
         const ble_gap_evt_lesc_dhkey_request_t * lescDHKeyReq = &bleEvent->evt.gap_evt.params.lesc_dhkey_request;
-        char buf[65];
 
         NRF_LOG_INFO("BLE_GAP_EVT_LESC_DHKEY_REQUEST received (con %" PRIu16 ")", conHandle);
         NRF_LOG_INFO("    Peer LESC public key:");
-        ToHexString(lescDHKeyReq->p_pk_peer->pk, 32, buf, sizeof(buf));
+        ToHexString(lescDHKeyReq->p_pk_peer->pk, kP256PubKeyCoordLength, buf, sizeof(buf));
         NRF_LOG_INFO("        X: %s", buf);
-        ToHexString(lescDHKeyReq->p_pk_peer->pk + 32, 32, buf, sizeof(buf));
+        ToHexString(lescDHKeyReq->p_pk_peer->pk + kP256PubKeyCoordLength, kP256PubKeyCoordLength, buf, sizeof(buf));
         NRF_LOG_INFO("        Y: %s", buf);
         NRF_LOG_INFO("    oobd_req: %" PRIu8, lescDHKeyReq->oobd_req);
+
         break;
     }
 
