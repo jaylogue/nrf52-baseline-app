@@ -1,0 +1,10 @@
+build/
+.vscode/
+__pycache__/
+*.code-workspace
+.cproject
+.project
+.pydevproject
+.settings/
+old/
+JLINK_MONITOR_ISR_SES.s
