@@ -29,8 +29,12 @@ APP = nrf52-baseline-app
 
 SRCS = \
     $(PROJECT_ROOT)/main/main.cpp \
-    $(PROJECT_ROOT)/main/SampleBLEService.cpp \
+    $(PROJECT_ROOT)/support/nrf5/SimpleBLEApp.cpp \
+    $(PROJECT_ROOT)/support/nrf5/LEDButtonService.cpp \
+    $(PROJECT_ROOT)/support/nrf5/BLEEventLogger.cpp \
+    $(PROJECT_ROOT)/support/nrf5/LESCOOB.cpp \
     $(PROJECT_ROOT)/support/nrf5/nRF5SysTime.cpp \
+    $(PROJECT_ROOT)/support/nrf5/nRF5Utils.cpp \
     $(PROJECT_ROOT)/support/general/CXXExceptionStubs.cpp \
     $(PROJECT_ROOT)/support/nrf5/nRF5Sbrk.c \
     $(PROJECT_ROOT)/support/general/AltPrintf.c \
@@ -188,6 +192,7 @@ LIBS = \
     $(NRF5_SDK_ROOT)/external/nrf_cc310/lib/cortex-m4/hard-float/libnrf_cc310_0.9.13.a
 
 DEFINES = \
+    DEBUG \
     NRF52840_XXAA \
     BOARD_PCA10056 \
     CONFIG_GPIO_AS_PINRESET \

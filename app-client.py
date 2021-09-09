@@ -234,8 +234,7 @@ class AppClient():
             self.ledChar = self.getCharacteristicObj(devicePath, AppClient.LED_CHAR_UUID)
             self.buttonChar = self.getCharacteristicObj(devicePath, AppClient.BUTTON_CHAR_UUID)
             
-            self.setLED(False)
-            
+            print('Enabling button notifications')            
             self.buttonChar.PropertiesChanged.connect(onButtonNotify)
             self.buttonChar.StartNotify()
             

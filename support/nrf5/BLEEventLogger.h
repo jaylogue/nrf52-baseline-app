@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2020 Jay Logue
+ * Copyright (c) 2021 Jay Logue
  * All rights reserved.
  *
  *    Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,32 +18,35 @@
 
 /**
  *   @file
- *         A simple BLE service based on the Nordic SoftDevice and nRF5 SDK.
+ *         Support for automatic logging of Nordic SoftDevice BLE events.
  */
 
-#ifndef SAMPLEBLESERVICE_H_
-#define SAMPLEBLESERVICE_H_
+#ifndef BLEEVENTLOGGER_H_
+#define BLEEVENTLOGGER_H_
 
+namespace nrf5utils {
 
-class SampleBLEService final
+class BLEEventLogger final
 {
 public:
     static ret_code_t Init(void);
-    static void Shutdown(void);
-    static void UpdateButtonState(bool isPressed);
 
 private:
-    static ret_code_t SetDeviceName(void);
-    static ret_code_t ConfigureAdvertising(void);
-    static ret_code_t ConfigureGATTService(void);
-    static ret_code_t StartAdvertising(void);
     static void HandleBLEEvent(ble_evt_t const * bleEvent, void * context);
-    static ret_code_t RegisterVendorUUID(ble_uuid_t & uuid, const ble_uuid128_t & vendorUUID);
 };
 
-extern void OnAdvertisingStarted(void);
-extern void OnConnectionEstablished(void);
-extern void OnConnectionTerminated(void);
-extern void OnLEDWrite(bool setOn);
+} // namespace nrf5utils
 
-#endif // SAMPLEBLESERVICE_H
+
+/** Compile-time configuration options for the BLEEventLogger class
+ * @{ */
+
+/** Observer priority for BLEEventLogger module
+ */
+#ifndef BLE_EVENT_LOGGER_OBSERVER_PRIO
+#define BLE_EVENT_LOGGER_OBSERVER_PRIO 0
+#endif // BLE_EVENT_LOGGER_OBSERVER_PRIO
+
+/**@} */
+
+#endif // BLEEVENTLOGGER_H_
