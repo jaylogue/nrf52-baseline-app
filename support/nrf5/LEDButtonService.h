@@ -50,6 +50,9 @@ public:
 
 private:
     static void HandleBLEEvent(ble_evt_t const * bleEvent, void * context);
+
+    LEDButtonService() = delete;
+    ~LEDButtonService() = delete;
 };
 
 
