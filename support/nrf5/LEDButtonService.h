@@ -25,6 +25,8 @@
 #ifndef LEDBUTTONSERVICE_H_
 #define LEDBUTTONSERVICE_H_
 
+#include <SimpleEventObserver.h>
+
 namespace nrf5utils {
 
 /** Implements the core logic for the Nordic LED-Button BLE service.
@@ -42,7 +44,8 @@ public:
 
     struct Event final
     {
-        static void OnLEDWrite(bool setOn) __WEAK;
+        // handler signature: void OnLEDWrite(bool setOn)
+        static SimpleEventObserver::Event<bool> OnLEDWrite;
     };
 
 private:

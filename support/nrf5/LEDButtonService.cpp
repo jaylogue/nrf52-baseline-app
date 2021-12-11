@@ -59,6 +59,7 @@ ble_gatts_char_handles_t sButtonCharHandles;
 
 } // unnamed namespace
 
+decltype(LEDButtonService::Event::OnLEDWrite) LEDButtonService::Event::OnLEDWrite;
 
 ret_code_t LEDButtonService::Init(void)
 {
@@ -231,17 +232,13 @@ void LEDButtonService::HandleBLEEvent(ble_evt_t const * bleEvent, void * context
     {
     case BLE_GATTS_EVT_WRITE:
 
-        // If the LED state is being written, invoke the application's OnLEDWrite
-        // event handler (if defined).
+        // If the LED state is being written, raise an OnLEDWrite event.
         if (bleEvent->evt.gatts_evt.params.write.handle == sLEDCharHandles.value_handle &&
             bleEvent->evt.gatts_evt.params.write.len == 1)
         {
             bool setOn = (bleEvent->evt.gatts_evt.params.write.data[0] != 0);
             NRF_LOG_INFO("LED characteristic write: %s", setOn ? "ON" : "OFF");
-            if (Event::OnLEDWrite)
-            {
-                Event::OnLEDWrite(setOn);
-            }
+            Event::OnLEDWrite.RaiseEvent(setOn);
         }
 
         break;
